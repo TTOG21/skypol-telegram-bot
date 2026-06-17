@@ -1,0 +1,208 @@
+company:
+  name: Skypol Arts & Media
+  slogan: Dein komplettes Werbe-Team
+  description: >
+    Skypol Arts & Media ist dein komplettes Werbe-Team für Fotografie, Videografie,
+    Social Media, Webseiten und Drucksachen – für Unternehmen, Selbstständige,
+    Gastronomie und private Veranstaltungen.
+  location: Am Roten Baum 9, 90518 Altdorf bei Nürnberg, Deutschland
+  phone: +49 176 8789 0032
+  email: info@skypol.de
+  website: https://skypol-arts-media.netlify.app/
+  instagram: https://www.instagram.com/skypol_arts_media/
+  facebook: https://www.facebook.com/61562830597899
+  map_url: https://maps.google.com/?q=Am+Roten+Baum+9,+90518+Altdorf+bei+Nürnberg
+  stats:
+    - 500+ Projekte
+    - 99+ Fotos im Portfolio
+    - 6 Leistungen
+    - 1 Komplettes Team
+
+services:
+  - category: Fotografie & Videografie
+    icon: 📸
+    description: >
+      Professionelle Portraits, Teamfotos, Image-Shootings, Event- und
+      Firmenreportagen sowie emotionale Hochzeits-, Tauf- und
+      Kommunionreportagen in Foto und Video.
+    items:
+      - Business & Portrait
+      - Events & Firmenfeiern
+      - Hochzeiten & Taufen
+      - Image-Shootings
+
+  - category: Gastronomie & Food
+    icon: 🍽️
+    description: >
+      Restaurant- und Food-Shootings für Restaurants, Cafés und Bars. Wir setzen
+      Lokale, Speisen und Drinks modern und appetitlich in Szene.
+    items:
+      - Restaurant-Shootings
+      - Food-Fotografie
+      - Menü- & Speisekarten
+      - Social-Media-Content
+
+  - category: Social Media Content & Reels
+    icon: 📱
+    description: >
+      Kreative Reels, Stories und Posts inklusive Planung, Produktion und
+      Bearbeitung – regelmäßig professionell präsent auf Instagram, Facebook & Co.
+    items:
+      - Reels & Stories
+      - Content-Planung
+      - Foto- & Videobearbeitung
+      - Posting-Strategie
+
+  - category: Google Business, Facebook & Instagram
+    icon: 🌐
+    description: >
+      Wir bringen dein Business dorthin, wo deine Kund:innen sind: Auf Google,
+      Facebook und Instagram – inklusive Profil-Einrichtung und Meta Business.
+    items:
+      - Google Business Profil
+      - Social-Media-Betreuung
+      - Meta Business Kampagnen
+      - Einheitliches Branding
+
+  - category: Webseiten & Online-Auftritt
+    icon: 💻
+    description: >
+      Moderne, klare Webseiten mit passenden Texten, Bildern, Videos und Struktur
+      – damit Kund:innen schnell verstehen, wer du bist und wie sie dich erreichen.
+    items:
+      - Responsive Webdesign
+      - Text & Bildkonzept
+      - SEO-Optimierung
+      - Hosting-Beratung
+
+  - category: Drucksachen, Karten, Speisekarten & Menüs
+    icon: 🖨️
+    description: >
+      Visitenkarten, Flyer, Poster, Banner, Roll-Ups, Einladungs- und
+      Dankeskarten, Speisekarten und Menüs – alles abgestimmt auf dein Branding.
+    items:
+      - Visitenkarten & Flyer
+      - Poster & Banner
+      - Einladungskarten
+      - Speisekarten & Menüs
+
+process:
+  title: Von der Idee zum fertigen Produkt
+  steps:
+    - number: 01
+      title: Kennenlernen
+      description: Wir besprechen deine Wünsche, Ziele und Visionen.
+    - number: 02
+      title: Konzeption
+      description: Wir entwickeln einen passenden Plan für Bilder, Content und Design.
+    - number: 03
+      title: Produktion
+      description: Wir drehen, fotografieren, designen und erstellen alles Notwendige.
+    - number: 04
+      title: Auslieferung
+      description: Du erhältst fertige Dateien, Online-Inhalte oder Drucksachen.
+
+faq:
+  - question: Wie lange dauert eine Buchung?
+    answer: >
+      Nach dem ersten Gespräch planen wir gemeinsam den Termin. Je nach Aufwand
+      können wir oft innerhalb weniger Tage starten.
+  - question: Welche Dateien erhalte ich?
+    answer: >
+      Du erhältst alle fertigen Bilder und Videos in Web- und Druckqualität,
+      je nach Vereinbarung.
+  - question: Fotografiert ihr auch außerhalb Deutschlands?
+    answer: Gerne! Wir sind flexibel und begleiten Projekte auch im Ausland.
+  - question: Wie läuft die Abrechnung ab?
+    answer: >
+      Nach der Anfrage erhältst du ein unverbindliches Angebot. Die Abrechnung
+      erfolgt nach Vereinbarung.
+  - question: Wie kann ich euch kontaktieren?
+    answer: >
+      Schreibe uns eine E-Mail an info@skypol.de oder rufe uns unter
+      +49 176 8789 0032 an. Alternativ nutze das Kontaktformular auf unserer
+      Webseite.
+
+portfolio:
+  title: Portfolio
+  url: https://skypol-arts-media.netlify.app/galerie.html
+  categories:
+    - Events & Firmen
+    - Food & Gastronomie
+    - Drinks & Bars
+    - Hochzeiten, Taufen & Kommunion
+
+testimonials:
+  - name: Anna M.
+    service: Hochzeitsfotografie
+    text: >
+      Die Zusammenarbeit mit Skypol Arts & Media war absolut professionell.
+      Die Bilder sind atemberaubend geworden – wir sind mehr als zufrieden!
+  - name: Thomas K.
+    service: Social Media Content
+    text: >
+      Endlich ein Team, das versteht, wie Social Media funktioniert.
+      Unsere Reichweite ist deutlich gestiegen und der Content sieht top aus.
+  - name: Maria S.
+    service: Food-Fotografie
+    text: >
+      Schnell, kreativ und zuverlässig. Die neuen Speisekarten und Food-Bilder
+      sehen fantastisch aus und bringen unsere Gerichte perfekt zur Geltung.
+
+booking:
+  title: Termin buchen
+  text: >
+    Buche jetzt dein persönliches Beratungsgespräch oder Shooting-Termin.
+    Wir melden uns innerhalb von 24 Stunden bei dir.
+  form_url: https://skypol-arts-media.netlify.app/kontakt.html
+  phone: +49 176 8789 0032
+  email: info@skypol.de
+
+legal:
+  imprint: https://skypol-arts-media.netlify.app/impressum.html
+  privacy: https://skypol-arts-media.netlify.app/datenschutz.html
+  responsible: Skypol Arts & Media, Am Roten Baum 9, 90518 Altdorf bei Nürnberg
+
+welcome_messages:
+  de: |
+    Hallo! 👋 Ich bin der Skypol Assistant.
+    Ich helfe dir gerne bei Fragen zu unseren Leistungen, Preisen, Terminen und Kontaktdaten.
+    Wie kann ich dir heute helfen?
+  en: |
+    Hello! 👋 I'm the Skypol Assistant.
+    I'm happy to help with questions about our services, pricing, appointments, and contact details.
+    How can I help you today?
+  el: |
+    Γεια σου! 👋 Είμαι ο Skypol Assistant.
+    Χαίρομαι να σε βοηθήσω με ερωτήσεις σχετικά με τις υπηρεσίες μας, τις τιμές, τα ραντεβού και τα στοιχεία επικοινωνίας.
+    Πώς μπορώ να σε βοηθήσω σήμερα;
+
+# Keywords that trigger the bot in group chats (privacy mode must be disabled)
+group_keywords:
+  de:
+    - skypol
+    - hilfe
+    - support
+    - frage
+    - info
+    - leistung
+    - preis
+    - termin
+  el:
+    - skypol
+    - βοήθεια
+    - υποστήριξη
+    - ερώτηση
+    - πληροφορίες
+    - υπηρεσία
+    - τιμή
+    - ραντεβού
+  en:
+    - skypol
+    - help
+    - support
+    - question
+    - info
+    - service
+    - price
+    - appointment
