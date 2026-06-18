@@ -1,7 +1,5 @@
 <!-- AGENTS.md für Skypol Arts & Media Telegram Support Bot -->
-
-Diese Datei richtet sich an KI-Coding-Agenten, die mit diesem Projekt arbeiten.
-Sie enthält die wichtigsten Informationen zur Struktur, zum Aufbau und zu den Konventionen des Projekts.
+<!-- Diese Datei richtet sich an KI-Coding-Agenten, die mit diesem Projekt arbeiten. -->
 
 ## Projektübersicht
 
@@ -21,10 +19,12 @@ Der Bot kann lokal im Polling-Modus getestet und produktiv auf **Render** als We
 - **PyYAML** zum Laden der Wissensdatenbank
 - **python-dotenv** für `.env`-Konfiguration
 - **httpx** für Hilfsskripte
+- **pytest** + **pytest-cov** für Tests (`pytest-cov>=5.0.0` ist in `requirements.txt` enthalten)
+- **SQLite** (stdlib `sqlite3`) für Persistenz
+- **GitHub Actions** CI
 
 Es gibt **kein** `pyproject.toml`, `setup.py`, `package.json` oder ähnliches.
 Die Abhängigkeiten werden ausschließlich über `requirements.txt` verwaltet.
-Eine GitHub Actions CI-Pipeline (`.github/workflows/ci.yml`) führt bei Push/PR die pytest-Suite aus.
 
 ## Projektstruktur
 
@@ -34,25 +34,29 @@ Eine GitHub Actions CI-Pipeline (`.github/workflows/ci.yml`) führt bei Push/PR 
 │   └── knowledge_base.yaml      # Wissensdatenbank des Unternehmens
 ├── src/
 │   ├── __init__.py              # leer
-│   ├── main.py                  # FastAPI-App, Webhook-Endpunkt, Startup/Shutdown
+│   ├── main.py                  # FastAPI-App, Webhook-Endpunkt, Startup/Shutdown, Health/Metrics
 │   ├── bot.py                   # Telegram-Handler, Befehle, Callbacks, Nachrichtenverarbeitung
 │   ├── config.py                # Laden und Validieren der Umgebungsvariablen
-│   ├── knowledge.py             # KnowledgeBase-Loader und Prompt-Kontext
-│   ├── llm.py                   # Anthropic- oder OpenAI-kompatible LLM-Clients
-│   ├── memory.py                # In-Memory-Gesprächsspeicher
-│   ├── utils.py                 # Spracherkennung, Gruppen-Trigger, Formatierung
-│   ├── analytics.py             # In-Memory-Statistiken
-│   ├── tickets.py               # Support-Ticket-System
-│   ├── database.py              # SQLite-Datenbankschicht (Users, Tickets, Memory, Feedback, Gaps)
-│   └── moderation.py            # Flood-Schutz und Admin-Checks
+│   ├── knowledge.py             # KnowledgeBase-Loader, Retriever, Exact-Match-FAQ, gelernte FAQs
+│   ├── llm.py                   # Anthropic- oder OpenAI-kompatible LLM-Clients, Guard, Cache
+│   ├── memory.py                # Gesprächsspeicher mit optionaler SQLite-Persistenz
+│   ├── utils.py                 # Spracherkennung, Gruppen-Trigger, Formatierung, Sanitization
+│   ├── analytics.py             # Datenbank-gestützte Statistiken
+│   ├── tickets.py               # Support-Ticket-System (Fassade über database.py)
+│   ├── database.py              # SQLite-Datenbankschicht (Users, Tickets, Memory, Feedback, Gaps, ...)
+│   ├── moderation.py            # Flood-Schutz und Admin-Checks
+│   └── logging_config.py        # Zentrale Logging-Konfiguration (Text/JSON, rotierende Datei, Token-Redaktion)
 ├── tests/
 │   ├── __init__.py              # leer
-│   ├── test_main.py             # Import-Test für main
-│   ├── test_utils.py            # Tests für Sprache, Trigger, KnowledgeBase, Memory
+│   ├── test_main.py             # Import-Test für main + Rate-Limiter
+│   ├── test_utils.py            # Tests für Sprache, Trigger, KnowledgeBase, Memory, Formatierung
 │   ├── test_webhook.py          # Health- und Webhook-Endpunkt-Tests mit FastAPI TestClient
 │   ├── test_enhancements.py     # Tests für Analytics, Tickets, Moderation, Admin-Checks
-│   ├── test_llm.py              # Tests für LLM-Validierung, Timeout, Retry undRetriever
-│   └── test_bot.py              # Tests für Telegram-Handler, /setflood und Gruppen-Moderation
+│   ├── test_llm.py              # Tests für LLM-Validierung, Timeout, Retry, Cache, ResponseGuard
+│   ├── test_bot.py              # Tests für Telegram-Handler, /setflood und Gruppen-Moderation
+│   ├── test_memory.py           # Tests für Gesprächsspeicher und Persistenz
+│   ├── test_knowledge_learning.py # Tests für gelernte FAQs und Wissenslücken
+│   └── test_logging_config.py   # Tests für Logging-Format, Level und Token-Redaktion
 ├── get_chat_id.py               # Hilfsskript zur Ermittlung der ADMIN_CHAT_ID
 ├── reset_webhook.py             # Löscht Webhook und ausstehende Updates
 ├── run_polling.py               # Lokaler Polling-Modus
@@ -106,42 +110,65 @@ Auf Render wird genau dieser Startbefehl aus `render.yaml` verwendet.
 1. `src/main.py` erstellt beim Import die Telegram-`Application` (`create_application()` aus `src/bot.py`) und die FastAPI-App.
    Beim Import werden außerdem die Pflichtfelder `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` und `LLM_PROVIDER` validiert.
 2. Beim Startup (FastAPI-`lifespan`) wird die Telegram-App initialisiert und gestartet.
-   Ist `RENDER_EXTERNAL_URL` gesetzt, wird der Webhook auf `{RENDER_EXTERNAL_URL}/webhook` gesetzt.
+   Es werden Bot-Kommandomenüs für private und Gruppenchats registriert, ein Selbsttest für Telegram-Token und LLM-Client ausgeführt und,
+   falls `RENDER_EXTERNAL_URL` gesetzt ist, der Webhook auf `{RENDER_EXTERNAL_URL}/webhook` gesetzt.
 3. Telegram sendet Updates per POST an `/webhook`.
-   Dort wird optional das Header-Feld `X-Telegram-Bot-Api-Secret-Token` gegen `WEBHOOK_SECRET` geprüft.
-   Der Payload wird auf maximale Größe sowie auf ein gültiges `update_id` geprüft, bevor er deserialisiert wird;
-   ungültige Payloads werden mit `200 OK` beantwortet, damit Telegram keine Retries sendet.
-4. `src/bot.py` verteilt die Updates auf Command-Handler, Callback-Handler und den allgemeinen Text-Handler.
+   Dort wird optional das Header-Feld `X-Telegram-Bot-Api-Secret-Token` gegen `WEBHOOK_SECRET` geprüft,
+   die Quell-IP gegen ein einfaches Rate-Limit geprüft, die Payload-Größe auf maximal 1 MB begrenzt
+   und ein gültiges `update_id` erwartet, bevor `Update.de_json()` aufgerufen wird.
+   Ungültige Payloads werden mit `200 OK` beantwortet, damit Telegram keine Retries sendet.
+4. `src/bot.py` verteilt die Updates auf Command-Handler, Callback-Handler, ChatMember-Handler und den allgemeinen Text-Handler.
 5. Freitextnachrichten werden in `handle_message` verarbeitet:
+   - Prüfung gegen die Blockliste.
    - In Gruppen antwortet der Bot nur bei Mention, Antwort auf seine Nachrichten, Bot-Namen ohne `@` oder definierten Schlüsselwörtern.
    - Keyword-Trigger verwenden Wortgrenzen, um Fehltriggerungen durch Teilwörter zu vermeiden.
-   - Bei einem Gruppen-Trigger (ohne direkte Antwort auf den Bot) zeigt der Bot ein kompaktes Inline-Menü mit den wichtigsten Optionen an, anstatt sofort eine LLM-Antwort zu generieren. So müssen Nutzer keine Befehle kennen.
+   - Bei einem Gruppen-Trigger (ohne direkte Antwort auf den Bot) zeigt der Bot ein kompaktes Inline-Menü mit den wichtigsten Optionen an, anstatt sofort eine LLM-Antwort zu generieren.
    - Antworten auf Bot-Nachrichten in Gruppen werden weiterhin als Konversation per LLM beantwortet.
-   - Flood-Schutz löscht bei zu vielen Nachrichten eines Nutzers innerhalb des konfigurierten Zeitfensters.
-   - Die Sprache wird mit `detect_language` bestimmt.
+   - Flood-Schutz löscht bei zu vielen Nachrichten eines Nutzers innerhalb des konfigurierten Zeitfensters und schaltet den Nutzer vorübergehend stumm.
+   - Die Sprache wird mit `detect_language` bzw. `get_user_language` bestimmt (Reihenfolge: DB-Präferenz → Telegram-`language_code` → Text-Heuristik).
    - Die Nachricht und der Gesprächsverlauf werden in `ConversationMemory` gespeichert.
-   - Der LLM-Client (`src/llm.py`) wählt aus der Knowledge Base die für die Nutzerfrage relevantesten FAQ-Einträge und Leistungen aus (`find_relevant_context`) und injiziert nur diesen fokussierten Kontext in den Prompt. Steht nichts Passendes zur Verfügung, fällt er auf den vollen Kontext zurück. FAQ-Einträge und Services werden einmalig beim Start vor-tokenisiert, um wiederholte Berechnungen zu vermeiden.
+   - Der LLM-Client (`src/llm.py`) wählt aus der Knowledge Base die für die Nutzerfrage relevantesten FAQ-Einträge und Leistungen aus (`find_relevant_context`) und injiziert nur diesen fokussierten Kontext in den Prompt. Steht nichts Passendes zur Verfügung, fällt er auf den vollen Kontext zurück.
+   - FAQ-Einträge und Services werden einmalig beim Start vor-tokenisiert, um wiederholte Berechnungen zu vermeiden.
    - Eingehende Texte werden vor Speicherung und LLM-Aufruf bereinigt (`sanitize_input`).
-   - Jede LLM-Antwort wird auf verbotene Preisangaben, informelle Anrede und Instruction-Leaks geprüft (`ResponseGuard`).
+   - Wenn die Nutzerfrage exakt einer FAQ-Frage entspricht, wird die hinterlegte Antwort direkt ausgegeben (kein LLM-Aufruf). Gelernte FAQs werden vor den statischen FAQs geprüft.
+   - Jede LLM-Antwort wird auf verbotene Preisangaben, informelle Anrede und Instruction-Leaks geprüft (`ResponseGuard`, `validate_response`).
    - Identische Nutzerfragen werden über einen TTL-Cache beantwortet, ohne erneuten API-Aufruf.
-   - Wenn die Nutzerfrage exakt einer FAQ-Frage entspricht, wird die hinterlegte Antwort direkt ausgegeben (kein LLM-Aufruf).
    - Die Antwort wird escaped und mit `ParseMode.MARKDOWN` gesendet.
-   - Bei Flood in Gruppen wird der Nutzer automatisch vorübergehend stummgeschaltet.
-   - Die optionale Memory-Persistenz speichert asynchron, um den Event-Loop nicht zu blockieren.
+   - Fallback-Antworten werden als unbeantwortete Fragen (`unanswered_questions`) in der Datenbank erfasst.
+6. Die JobQueue führt zwei wiederkehrende Jobs aus:
+   - `_ticket_reminder_job` erinnert Admins alle 4 Stunden an offene Tickets.
+   - `_auto_close_job` schließt Tickets nach 7 Tagen Inaktivität automatisch.
 
 ## Code-Organisation und Module
 
 - `src/config.py` – Zentrale Konfiguration. Lädt `.env` aus dem Projektroot, definierte Pfade und validiert Pflichtfelder (`TELEGRAM_BOT_TOKEN`, `LLM_API_KEY`, `LLM_PROVIDER`).
 - `src/knowledge.py` – Lädt `data/knowledge_base.yaml`, stellt Zugriffsmethoden bereit und implementiert mit `find_relevant_context()` einen einfachen Retriever für fokussierte Prompt-Kontexte. Unterstützt gelernte FAQs aus der Datenbank (`add_learned_faq`), die vor den statischen FAQs in Exact-Match und Relevanz-Scoring einbezogen werden.
 - `src/llm.py` – Abstrakte `BaseLLMClient`-Klasse mit System-Prompt-Builder, fokussiertem Kontext, `ResponseGuard`, Response-Validierung, Timeout, Retry und einem TTL-basierten Response-Cache. Konkrete Implementierungen `AnthropicClient` und `OpenAICompatibleClient`.
-- `src/logging_config.py` – Zentrale Logging-Konfiguration. Unterstützt textbasierte (Default) und JSON-Ausgabe (`LOG_FORMAT=json`) sowie konfigurierbares `LOG_LEVEL`.
-- `src/memory.py` – `ConversationMemory` mit `collections.deque` pro `(chat_id, user_id)`, begrenzt durch `MAX_HISTORY`, optional mit JSON-Persistenz.
+- `src/logging_config.py` – Zentrale Logging-Konfiguration. Unterstützt textbasierte (Default) und JSON-Ausgabe (`LOG_FORMAT=json`), konfigurierbares `LOG_LEVEL` sowie optionalen rotierenden Datei-Output (`LOG_FILE`, `LOG_FILE_MAX_BYTES`, `LOG_FILE_BACKUPS`). Beide Formatter reden das Bot-Token (`<REDACTED>`).
+- `src/memory.py` – `ConversationMemory` mit `collections.deque` pro `(chat_id, user_id)`, begrenzt durch `MAX_HISTORY`, optional mit **SQLite-Persistenz** (`PERSIST_MEMORY=true`). Die Datenbank ist die Source of Truth; ein kleiner In-Memory-Cache hält zuletzt genutzte Verläufe hot.
 - `src/utils.py` – Spracherkennung, Gruppen-Trigger-Logik (ladbar aus `data/knowledge_base.yaml`), Input-Sanitization, Markdown-Escaping, Formatierung von Services, FAQ, About, Testimonials, Booking, Social und Location.
-- `src/analytics.py` – Thread-sicherer In-Memory-Tracker für Nachrichten, Befehle, aktive Nutzer und Tickets.
-- `src/tickets.py` – Datenbank-gestütztes Support-Ticket-System mit Erstellen, Nachrichten hinzufügen, Schließen, Listen, Export und automatischem Schließen inaktiver Tickets.
-- `src/database.py` – SQLite-Datenbankschicht für Nutzer, Tickets, Gesprächsverlauf, Feedback, unbeantwortete Fragen, gelernte FAQs (`learned_faq`), Blockliste und Flood-Tracking.
-- `src/moderation.py` – Per-Chat-Flood-Schutz, Laufzeit-Konfiguration der Thresholds und Hilfsfunktion `is_admin_user` zur Admin-Prüfung.
+- `src/analytics.py` – Datenbank-gestützter Tracker für Nachrichten, Befehle, Support-Tickets und Flood-Events. `get_stats()` liefert Werte für `/stats` und `/metrics`.
+- `src/tickets.py` – Unterstützungssystem mit Erstellen, Nachrichten hinzufügen, Schließen, Listen, Export und automatischem Schließen inaktiver Tickets. Dünne Fassade über `src/database.py`.
+- `src/database.py` – SQLite-Datenbankschicht für Nutzer, Tickets, Gesprächsverlauf, Feedback, unbeantwortete Fragen, gelernte FAQs, Blockliste, Flood-Tracking, Analytics und Sprachpräferenzen.
+- `src/moderation.py` – Per-Chat-Flood-Schutz mit Datenbank-Backend, Laufzeit-Konfiguration der Thresholds und Hilfsfunktion `is_admin_user` zur Admin-Prüfung.
 - `src/bot.py` – Alle Telegram-Handler, Inline-Tastaturen, Gruppen-Admin-Features (Willkommensnachricht, Pin-Menü), Ticket-System, Feedback, Wissenslücken, Erinnerungsjobs, Analytics, Moderation und Fehlerbehandlung.
+
+## Datenbankschema
+
+Die SQLite-Datenbank (Default: `.bot_data.db`) enthält folgende Tabellen:
+
+| Tabelle | Zweck |
+|---------|-------|
+| `tickets` | Support-Tickets mit Status, Nachrichten-JSON und Timestamps |
+| `memory` | Persistierter Gesprächsverlauf pro `chat_id:user_id` |
+| `analytics` | Event-Stream für Nachrichten, Befehle, Tickets, Flood-Events |
+| `flood_events` | Zeitstempel-basiertes Flood-Tracking pro Nutzer/Chat |
+| `user_preferences` | Bevorzugte UI-Sprache pro Nutzer |
+| `users` | Nutzerverzeichnis für Broadcasts, Export und Tracking |
+| `blocked_users` | Bot-Blockliste mit optionalem Grund |
+| `feedback` | Nutzer-Feedback und Sterne-Bewertungen |
+| `unanswered_questions` | Als Wissenslücken erfasste Fragen |
+| `learned_faq` | Von Admins gelernte FAQ-Einträge |
 
 ## Konfiguration
 
@@ -150,7 +177,7 @@ Alle sensiblen Werte kommen aus `.env` (siehe `.env.example`):
 | Variable | Bedeutung | Pflicht |
 |----------|-----------|---------|
 | `TELEGRAM_BOT_TOKEN` | Bot-Token von @BotFather | Ja |
-| `LLM_PROVIDER` | `anthropic` oder `openai` | Ja |
+| `LLM_PROVIDER` | `anthropic` oder `openai` | Ja (Default intern: `openai`; `.env.example`/`render.yaml`: `anthropic`) |
 | `LLM_API_KEY` | API-Key für den gewählten Provider | Ja |
 | `LLM_BASE_URL` | OpenAI-kompatible Base-URL (z. B. Kimi/Moonshot/OpenRouter) | Optional |
 | `LLM_MODEL` | Modellname | Optional (Default: `kimi-k2-0711-preview`) |
@@ -167,17 +194,21 @@ Alle sensiblen Werte kommen aus `.env` (siehe `.env.example`):
 | `FLOOD_MUTE_SECONDS` | Dauer der automatischen Stummschaltung bei Flood in Sekunden | Optional (Default: `60`) |
 | `WEBHOOK_RATE_LIMIT_RPS` | Maximale Webhook-Anfragen pro Sekunde pro IP | Optional (Default: `10`) |
 | `WEBHOOK_RATE_LIMIT_WINDOW` | Zeitfenster für Webhook-Rate-Limit in Sekunden | Optional (Default: `1`) |
-| `PERSIST_MEMORY` | Gesprächsspeicher in JSON-Datei persistieren (`true`/`false`) | Optional (Default: `false`) |
-| `MEMORY_FILE_PATH` | Pfad zur Speicherdatei für persistierten Memory | Optional (Default: `.memory.json`) |
+| `PERSIST_MEMORY` | Gesprächsspeicher in SQLite persistieren (`true`/`false`) | Optional (Default: `false`) |
 | `DATABASE_PATH` | Pfad zur SQLite-Datenbank | Optional (Default: `.bot_data.db`) |
 | `LOG_LEVEL` | Logging-Level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | Optional (Default: `INFO`) |
 | `LOG_FORMAT` | Logging-Format: `text` oder `json` | Optional (Default: `text`) |
+| `LOG_FILE` | Pfad zur optionalen Log-Datei | Optional (Default: leer) |
+| `LOG_FILE_MAX_BYTES` | Maximale Größe einer Log-Datei vor Rotation | Optional (Default: `10485760`) |
+| `LOG_FILE_BACKUPS` | Anzahl aufzubewahrender Backup-Log-Dateien | Optional (Default: `5`) |
 
 Hinweise:
 
 - `src/config.py` bietet Rückwärtskompatibilität zu älteren Variablennamen (`ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`).
-- `ADMIN_CHAT_ID` unterstützt eine einzelne numerische ID, mehrere komma-getrennte IDs oder Kanal-Usernames wie `@channelname`.
+- `ADMIN_CHAT_ID` unterstützt eine einzelne numerische ID, mehrere komma-getrennte IDs oder Kanal-Usernames wie `@channelname`. Bei Gruppen-Moderationsbefehlen (`/warn`, `/mute`, `/kick`, `/ban`) wird zusätzlich der tatsächliche Gruppen-Admin-Status geprüft; Kanal-Usernames werden dabei nicht als Admin-User erkannt.
 - `LLM_PROVIDER` wird in `src/config.py` auf `"anthropic"` oder `"openai"` normalisiert. Ist die Variable nicht gesetzt, fällt `config.py` intern auf `"openai"` zurück; `.env.example` und `render.yaml` setzen sie explizit auf `"anthropic"`.
+- `render.yaml` verwendet `LLM_PROVIDER=anthropic` mit `LLM_BASE_URL=https://api.kimi.com/coding/` – das ist ein Anthropic-kompatibler Kimi-Endpunkt.
+- `MEMORY_FILE_PATH` existiert als Legacy-Variable, wird aber nicht mehr verwendet; die Memory-Persistenz läuft über `DATABASE_PATH`.
 
 ## Befehlsübersicht
 
@@ -185,7 +216,7 @@ Nutzerbefehle:
 
 | Befehl | Beschreibung |
 |--------|--------------|
-| `/start` | Willkommensnachricht mit Hauptmenü |
+| `/start` | Willkommensnachricht mit Hauptmenü (privat) |
 | `/menu` | Hauptmenü anzeigen (privat und Gruppe) |
 | `/services` | Liste aller Leistungen |
 | `/portfolio` | Portfolio-Kategorien und Link |
@@ -229,8 +260,7 @@ Admin-Befehle:
 
 ## Testbefehle
 
-Die Tests liegen in `tests/` und sind als ausführbare Python-Skripte geschrieben.
-`pytest` ist nicht in `requirements.txt` enthalten, kann aber zusätzlich installiert werden.
+Die Tests liegen in `tests/` und funktionieren sowohl als ausführbare Skripte als auch unter `pytest`.
 
 ### Ausführung als Skripte
 
@@ -242,6 +272,8 @@ python tests/test_enhancements.py
 python tests/test_llm.py
 python tests/test_bot.py
 python tests/test_memory.py
+python tests/test_knowledge_learning.py
+python tests/test_logging_config.py
 ```
 
 ### Ausführung mit pytest
@@ -258,6 +290,22 @@ python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=70
 
 Wichtig: `test_main.py` und `test_webhook.py` setzen Dummy-Umgebungsvariablen, bevor `src.main` importiert wird, da `main.py` beim Import die Konfiguration validiert.
 
+## CI-Pipeline
+
+`.github/workflows/ci.yml`:
+
+- Auslösung bei `push` und `pull_request` auf `main`/`master`.
+- Matrix: Python 3.11 und 3.12.
+- Installiert Abhängigkeiten aus `requirements.txt`.
+- Führt aus:
+  ```bash
+  python -m pytest tests/ -v
+  ```
+- Setzt dabei Dummy-Umgebungsvariablen:
+  - `TELEGRAM_BOT_TOKEN`
+  - `ANTHROPIC_API_KEY` (Rückwärtskompatibilitäts-Alias)
+  - `DATABASE_PATH=/tmp/test_bot.db`
+
 ## Code-Style-Richtlinien
 
 - **Sprache:** Kommentare und Dokumentation sind überwiegend auf Deutsch; Code-Bezeichner sind auf Englisch.
@@ -272,10 +320,10 @@ Wichtig: `test_main.py` und `test_webhook.py` setzen Dummy-Umgebungsvariablen, b
 
 - **Secrets:** `TELEGRAM_BOT_TOKEN` und `LLM_API_KEY` werden aus `.env` geladen und dürfen niemals committet werden (`.gitignore` enthält `.env` und `venv/`).
 - **Webhook-Sicherheit:** Optionaler `WEBHOOK_SECRET` wird im Header `X-Telegram-Bot-Api-Secret-Token` geprüft. Der `/webhook`-Endpunkt validiert außerdem Payload-Größe und `update_id`, bevor `Update.de_json()` aufgerufen wird. Jede erfolgreich deserialisierte Webhook-Anfrage wird mit `update_id`, `chat_id` und Quell-IP geloggt (kein Nachrichtentext). Ein einfacher IP-basierter Rate-Limiter schützt vor Überlastung. Ohne Secret wird jede Anfrage akzeptiert.
-- **Datenschutz:** Standardmäßig liegen Gespräche nur im Arbeitsspeicher und sind pro User begrenzt (`MAX_HISTORY`). `/reset` löscht den Speicher sofort. Mit `PERSIST_MEMORY=true` werden Gespräche in `MEMORY_FILE_PATH` als JSON gespeichert; diese Datei muss dann entsprechend geschützt werden.
+- **Datenschutz:** Standardmäßig liegen Gespräche im Arbeitsspeicher und sind pro User begrenzt (`MAX_HISTORY`). `/reset` löscht den Speicher sofort. Mit `PERSIST_MEMORY=true` werden Gespräche in der SQLite-Datenbank gespeichert; die Datenbankdatei muss dann entsprechend geschützt werden.
 - **Gruppen-Spam-Schutz:** In Gruppen antwortet der Bot nur bei `@botname`-Mention, Antworten auf seine Nachrichten, dem Bot-Namen ohne `@` oder definierten Schlüsselwörtern in `src/utils.py`. Damit Keyword-Trigger in Gruppen funktionieren, muss der Privacy Mode des Bots in BotFather deaktiviert sein.
 - **Admin-Prüfung:** Admin-Befehle prüfen, ob die `user_id` des Absenders in `ADMIN_CHAT_ID` enthalten ist. In Gruppen werden Moderationsbefehle (`/warn`, `/mute`, `/kick`, `/ban`) zusätzlich gegen den tatsächlichen Gruppen-Admin-Status des Absenders geprüft. Kanal-Usernames in `ADMIN_CHAT_ID` werden dabei nicht als Admin-User erkannt.
-- **User-Directory & Blockliste:** Bei jeder Interaktion werden Nutzer in der SQLite-Datenbank (`users`) erfasst oder aktualisiert. Über `/block <user_id>` können Admins Nutzer sperren; gesperrte Nutzer erhalten keine Antworten mehr. Offene Tickets werden nach 7 Tagen Inaktivität automatisch geschlossen.
+- **User-Directory & Blockliste:** Bei jeder Interaktion werden Nutzer in der SQLite-Datenbank (`users`) erfasst oder aktualisiert. Über `/block <user_id>` können Admins Nutzer sperren; gesperrte Nutzer erhalten keine Antworten mehr.
 - **Feedback & Bewertungen:** Nutzer können mit `/feedback <Text>` Feedback hinterlassen. Nach dem Schließen eines Tickets werden automatisch 1-5-Sterne-Bewertungen erfragt und in der Datenbank gespeichert.
 - **Wissenslücken & Selbstlernen:** Wenn der Bot auf eine Frage mit der sicheren Fallback-Antwort antwortet, wird die Nutzerfrage als `unanswered_questions` in der Datenbank erfasst. Admins können sie mit `/gaps` einsehen; wiederkehrende Fragen werden priorisiert. Mit `/learn <gap_id> <Antwort>` entsteht eine gelernte FAQ, die sofort in Exact-Match und Prompt-Kontext genutzt wird. `/learned` listet den aktuellen Bestand.
 - **Erinnerungen:** Ein JobQueue-Job erinnert Admins alle 4 Stunden an offene Tickets; ein weiterer Job schließt Tickets nach 7 Tagen Inaktivität.
@@ -320,3 +368,5 @@ Der Bot lädt die Datei beim Start neu; bei laufendem Webhook-Modus ist ein Neus
 - Änderungen an Gruppen-Trigger-Wörtern müssen in `src/utils.py` in `GROUP_KEYWORDS` erfolgen.
 - Befehle, die in Gruppen automatisch gelöscht werden sollen, können mit dem `@cleanup_command()`-Dekorator versehen werden.
 - Befehle, die in der Analytics-Statistik erfasst werden sollen, können mit dem `@tracked_command("name")`-Dekorator versehen werden.
+- Memory-Persistenz läuft über SQLite (`PERSIST_MEMORY=true`, `DATABASE_PATH`), nicht über eine JSON-Datei.
+- Analytics-Werte stammen aus der SQLite-Datenbank; `started_at` ist der einzige in-memory-Wert.

@@ -433,6 +433,22 @@ def test_ticket_close_button_rejects_non_admin():
     print("✓ Ticket close button rejects non-admin")
 
 
+def test_callback_query_answer_failure_is_handled():
+    """Old/invalid callback queries should not crash the handler."""
+    update = _make_callback_update(data="services")
+    update.callback_query.answer = AsyncMock(
+        side_effect=Exception("Query is too old and response timeout expired or query id is invalid")
+    )
+    context = _make_context()
+
+    # Must not raise
+    run_async(button_callback(update, context))
+
+    update.callback_query.answer.assert_called_once()
+    update.callback_query.edit_message_text.assert_called_once()
+    print("✓ Callback query answer failure is handled gracefully")
+
+
 def test_reply_to_group_ticket_tries_private_first():
     """For a group ticket, reply should be sent privately to the user first."""
     ticket_id = tickets.create(user_id=111, chat_id=-100)

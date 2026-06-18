@@ -1875,7 +1875,11 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # --- Callbacks ---
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception as e:
+        # Alte oder ungültige Callback-Queries (z. B. nach Neustart) ignorieren
+        logger.debug("Could not answer callback query: %s", e)
     data = query.data
     lang = _language_for(update)
 
