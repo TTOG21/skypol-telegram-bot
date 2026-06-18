@@ -3,11 +3,13 @@ import csv
 import io
 import logging
 import re
+import time
 from datetime import timedelta
 from pathlib import Path
 
 from telegram import ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction, ParseMode
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -2122,10 +2124,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _is_fallback_reply(reply, lang):
         _log_unanswered_question(user.id, chat.id, text, lang)
 
-    await message.reply_text(
-        escape_markdown_basic(reply),
-        parse_mode=ParseMode.MARKDOWN,
-    )
+    try:
+        await message.reply_text(
+            escape_markdown_basic(reply),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    except BadRequest as e:
+        if "Can't parse entities" in str(e):
+            logger.warning("Markdown parse error, sending plain text fallback: %s", e)
+            await message.reply_text(reply)
+        else:
+            raise
 
 
 # --- Error handler ---
@@ -2138,8 +2147,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     chat = update.effective_chat
+    message = update.effective_message
     if chat.type in ("group", "supergroup"):
-        message = update.effective_message
         bot_username = f"@{context.bot.username}" if context.bot.username else ""
         is_direct = bool(
             message.entities
@@ -2158,7 +2167,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "en": "😕 Something went wrong. Please try again.",
     }
     try:
-        await update.effective_message.reply_text(apologies.get(lang, apologies["en"]))
+        await message.reply_text(apologies.get(lang, apologies["en"]))
     except Exception:
         pass
 
@@ -2169,7 +2178,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if now - _last_error_alert >= _ERROR_ALERT_COOLDOWN_SECONDS:
             _last_error_alert = now
             user = update.effective_user
-            chat = update.effective_chat
             error_text = str(context.error)[:200]
             alert = (
                 f"🚨 *Bot Error*\n"

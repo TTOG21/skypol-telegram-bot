@@ -144,9 +144,11 @@ def escape_markdown_basic(text: str) -> str:
 def format_services_list(services: list[dict], lang: str) -> str:
     lines = []
     for service in services:
-        lines.append(f"{service.get('icon', '')} *{service.get('category', '')}*")
+        lines.append(
+            f"{service.get('icon', '')} *{escape_markdown_basic(service.get('category', ''))}*"
+        )
         for item in service.get("items", []):
-            lines.append(f"  • {item}")
+            lines.append(f"  • {escape_markdown_basic(item)}")
         lines.append("")
     return "\n".join(lines)
 
@@ -154,8 +156,8 @@ def format_services_list(services: list[dict], lang: str) -> str:
 def format_faq(faq: list[dict], lang: str) -> str:
     lines = []
     for entry in faq:
-        lines.append(f"*Q:* {entry.get('question', '')}")
-        lines.append(f"*A:* {entry.get('answer', '')}\n")
+        lines.append(f"*Q:* {escape_markdown_basic(entry.get('question', ''))}")
+        lines.append(f"*A:* {escape_markdown_basic(entry.get('answer', ''))}\n")
     return "\n".join(lines)
 
 

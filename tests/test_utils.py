@@ -10,7 +10,9 @@ from src.utils import (
     escape_markdown_basic,
     format_about,
     format_booking,
+    format_faq,
     format_location,
+    format_services_list,
     format_social_links,
     format_testimonials,
     get_user_language,
@@ -196,6 +198,19 @@ def test_format_helpers():
     ])
     assert "Max" in testimonials
     assert "Super!" in testimonials
+
+    # Special Markdown characters in user-controlled content must be escaped
+    faq = format_faq([{"question": "Was ist *das*?", "answer": "Das ist _ein_ Test [link]"}], lang="de")
+    assert "\\*das\\*" in faq
+    assert "\\_ein\\_" in faq
+    assert "\\[link\\]" in faq
+
+    services = format_services_list([
+        {"icon": "📸", "category": "Foto_*_Video", "items": ["Item_[1]", "Item_`2`"]},
+    ], lang="de")
+    assert "\\*" in services
+    assert "\\[" in services
+    assert "\\`" in services
     print("✓ Format helper tests passed")
 
 
